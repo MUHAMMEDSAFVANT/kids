@@ -1,5 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
+import { getSupabaseServerClient, supabase } from "@/lib/supabase";
 
 export type MemberRecord = {
   id: string;
@@ -11,35 +10,53 @@ export type MemberRecord = {
   created_at: string;
 };
 
-const DATA_DIR = path.join(process.cwd(), "data");
-const DATA_FILE = path.join(DATA_DIR, "members.json");
+function normalizeMember(record: any): MemberRecord {
+  const rawVotedDevices = record?.voted_devices;
+  let votedDevices: string[] = [];
 
-async function ensureStore() {
-  await mkdir(DATA_DIR, { recursive: true });
-
-  try {
-    await readFile(DATA_FILE, "utf-8");
-  } catch {
-    await writeFile(DATA_FILE, JSON.stringify([], null, 2), "utf-8");
+  if (Array.isArray(rawVotedDevices)) {
+    votedDevices = rawVotedDevices.map((item) => String(item));
+  } else if (typeof rawVotedDevices === "string") {
+    try {
+      const parsed = JSON.parse(rawVotedDevices);
+      if (Array.isArray(parsed)) {
+        votedDevices = parsed.map((item) => String(item));
+      }
+    } catch {
+      votedDevices = [];
+    }
   }
+
+  return {
+    id: String(record?.id ?? `member-${Date.now()}`),
+    name: String(record?.name ?? ""),
+    image_url: String(record?.image_url ?? ""),
+    share_code: String(record?.share_code ?? ""),
+    vote_count: Number(record?.vote_count ?? 0),
+    voted_devices: votedDevices,
+    created_at: String(record?.created_at ?? new Date().toISOString()),
+  };
 }
+
+const getClient = () => (supabase ?? getSupabaseServerClient());
 
 export async function readMembers(): Promise<MemberRecord[]> {
-  await ensureStore();
-
-  const file = await readFile(DATA_FILE, "utf-8");
-
   try {
-    const parsed = JSON.parse(file) as MemberRecord[];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
+    const client = getClient();
+    const { data, error } = await client
+      .from("members")
+      .select("*")
+      .order("vote_count", { ascending: false });
+
+    if (error) {
+      throw error;
+    }
+
+    return (data ?? []).map(normalizeMember);
+  } catch (error) {
+    console.error("[store] readMembers error:", error);
     return [];
   }
-}
-
-export async function writeMembers(members: MemberRecord[]) {
-  await ensureStore();
-  await writeFile(DATA_FILE, JSON.stringify(members, null, 2), "utf-8");
 }
 
 export async function createMember({
@@ -49,79 +66,93 @@ export async function createMember({
   name: string;
   image_url: string;
 }): Promise<MemberRecord> {
-  const members = await readMembers();
-  const record: MemberRecord = {
-    id: `member-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+  const client = getClient();
+  const memberId = `member-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const shareCode = `kid-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+  const record = {
+    id: memberId,
     name,
     image_url: image_url || "",
-    share_code: `kid-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    share_code: shareCode,
     vote_count: 0,
     voted_devices: [],
     created_at: new Date().toISOString(),
   };
 
-  members.unshift(record);
-  await writeMembers(members);
+  const { data, error } = await client.from("members").insert(record).select().single();
 
-  console.log("[store] member created", {
-    id: record.id,
-    name: record.name,
-    share_code: record.share_code,
-    created_at: record.created_at,
-    vote_count: record.vote_count,
-  });
+  if (error || !data) {
+    console.error("[store] createMember error:", error);
+    throw new Error(error?.message ?? "Unable to create member.");
+  }
 
-  return record;
+  return normalizeMember(data);
 }
 
 export async function getMemberByShareCode(share_code: string): Promise<MemberRecord | null> {
-  const members = await readMembers();
-  return members.find((member) => member.share_code === share_code) ?? null;
+  try {
+    const client = getClient();
+    const { data, error } = await client
+      .from("members")
+      .select("*")
+      .eq("share_code", share_code)
+      .maybeSingle();
+
+    if (error) {
+      throw error;
+    }
+
+    return data ? normalizeMember(data) : null;
+  } catch (error) {
+    console.error("[store] getMemberByShareCode error:", error);
+    return null;
+  }
 }
 
 export async function voteForMember(
   share_code: string,
   device_id: string,
 ): Promise<{ member: MemberRecord | null; alreadyVoted: boolean }> {
-  const members = await readMembers();
-  const index = members.findIndex((member) => member.share_code === share_code);
+  try {
+    const client = getClient();
+    const { data: memberData, error: memberError } = await client
+      .from("members")
+      .select("*")
+      .eq("share_code", share_code)
+      .maybeSingle();
 
-  if (index === -1) {
+    if (memberError || !memberData) {
+      throw memberError ?? new Error("Member not found.");
+    }
+
+    const member = normalizeMember(memberData);
+    const currentDevices = member.voted_devices ?? [];
+
+    if (device_id && currentDevices.includes(device_id)) {
+      return { member, alreadyVoted: true };
+    }
+
+    const nextDevices = device_id ? [...new Set([...currentDevices, device_id])] : currentDevices;
+    const nextVoteCount = Number(member.vote_count ?? 0) + 1;
+
+    const { data: updated, error: updateError } = await client
+      .from("members")
+      .update({
+        vote_count: nextVoteCount,
+        voted_devices: nextDevices,
+      })
+      .eq("id", member.id)
+      .select()
+      .single();
+
+    if (updateError || !updated) {
+      throw updateError ?? new Error("Vote update failed.");
+    }
+
+    return { member: normalizeMember(updated), alreadyVoted: false };
+  } catch (error) {
+    console.error("[store] voteForMember error:", error);
     return { member: null, alreadyVoted: false };
   }
-
-  const member = members[index];
-  const votedDevices = new Set(member.voted_devices ?? []);
-
-  if (device_id && votedDevices.has(device_id)) {
-    console.log("[store] duplicate vote blocked", {
-      share_code,
-      device_id,
-      member_name: member.name,
-      vote_count: member.vote_count,
-      created_at: member.created_at,
-    });
-    return { member, alreadyVoted: true };
-  }
-
-  votedDevices.add(device_id || `guest-${Date.now()}`);
-
-  members[index] = {
-    ...member,
-    voted_devices: [...votedDevices],
-    vote_count: Number(member.vote_count ?? 0) + 1,
-  };
-
-  await writeMembers(members);
-
-  console.log("[store] vote updated live", {
-    share_code,
-    member_name: members[index].name,
-    vote_count: members[index].vote_count,
-    created_at: members[index].created_at,
-    updated_at: new Date().toISOString(),
-    device_id,
-  });
-
-  return { member: members[index], alreadyVoted: false };
 }
