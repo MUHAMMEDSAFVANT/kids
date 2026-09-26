@@ -413,12 +413,12 @@ export default function Home() {
             </nav>
 
             <div className="flex shrink-0 items-center gap-2">
-              <Link
+              {/* <Link
                 href="/admin"
                 className="inline-flex h-10 min-w-[78px] items-center justify-center rounded-full border border-white/15 bg-[#0d1211] px-3 text-[0.58rem] font-medium uppercase tracking-[0.12em] text-[#f5dca2] transition hover:border-[#d8ba7a] sm:h-11 sm:min-w-[92px] sm:px-4 sm:text-[0.65rem]"
               >
                 Admin
-              </Link>
+              </Link> */}
               <button
                 type="button"
                 onClick={() => setIsJoinOpen((current) => !current)}
