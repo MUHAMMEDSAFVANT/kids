@@ -1,7 +1,9 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from "react";
 
 type MemberRecord = {
   id: string;
@@ -55,6 +57,7 @@ const CLOUDINARY_UPLOAD_PRESET = "profile_upload";
 const CLOUDINARY_UPLOAD_URL = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`;
 
 export default function Home() {
+  const router = useRouter();
   const [memberName, setMemberName] = useState("");
   const [imageUrl, setImageUrl] = useState("");
   const [shareUrl, setShareUrl] = useState("");
@@ -105,7 +108,7 @@ export default function Home() {
     image: member.image_url || avatarImages[index % avatarImages.length],
   }));
 
-  const fetchMembers = async () => {
+  const fetchMembers = useCallback(async () => {
     try {
       const response = await fetch("/api/members");
       const result = await response.json();
@@ -121,15 +124,19 @@ export default function Home() {
     } catch {
       setMembers([]);
     }
-  };
+  }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- client-only URL hydration avoids SSR mismatch
     setShareUrl(window.location.href);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- client-only mount state for share links
     setIsMounted(true);
-    fetchMembers();
-    const timer = window.setInterval(fetchMembers, 4000);
+    void fetchMembers();
+    const timer = window.setInterval(() => {
+      void fetchMembers();
+    }, 4000);
     return () => window.clearInterval(timer);
-  }, []);
+  }, [fetchMembers]);
 
   const handleImageUpload = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -138,7 +145,7 @@ export default function Home() {
     }
 
     setIsUploadingImage(true);
-    setStatusMessage("Uploading image to Cloudinary...");
+    setStatusMessage("Uploading image ...");
 
     try {
       const formData = new FormData();
@@ -244,8 +251,8 @@ export default function Home() {
       if (result?.data?.share_url) {
         setShareUrl(result.data.share_url);
         setIsJoinOpen(false);
-        const successUrl = `/success?name=${encodeURIComponent(safeName)}&link=${encodeURIComponent(result.data.share_url)}`;
-        window.location.href = successUrl;
+        const successUrl = `/success?name=${encodeURIComponent(safeName)}&link=${encodeURIComponent(result.data.share_url)}&image=${encodeURIComponent(imageUrl.trim())}`;
+        router.push(successUrl);
         return;
       }
 
@@ -260,7 +267,7 @@ export default function Home() {
 
   const shareText = useMemo(() => {
     const name = memberName.trim() || "My child";
-    return `Hi! I am joining Starly and my child ${name} is ready to shine. Join us!`;
+    return `Hi! I’m joining Starly and my child ${name} is ready to shine. Join my star link and unlock an exclusive gift!`;
   }, [memberName]);
 
   const shareLinks = useMemo(() => {
@@ -272,7 +279,10 @@ export default function Home() {
       };
     }
 
-    const encodedUrl = encodeURIComponent(shareUrl);
+    const shareUrlWithImage = imageUrl
+      ? `${shareUrl}${shareUrl.includes("?") ? "&" : "?"}image=${encodeURIComponent(imageUrl)}`
+      : shareUrl;
+    const encodedUrl = encodeURIComponent(shareUrlWithImage);
     const encodedText = encodeURIComponent(shareText);
 
     return {
@@ -280,7 +290,7 @@ export default function Home() {
       facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}&quote=${encodedText}`,
       instagram: `https://www.instagram.com/?url=${encodedUrl}`,
     };
-  }, [shareText, shareUrl, isMounted]);
+  }, [imageUrl, isMounted, shareText, shareUrl]);
 
   const winnerSlides = [
     {
@@ -317,18 +327,19 @@ export default function Home() {
     <div className="min-h-screen bg-[#070b09] text-[#f2efe6]">
       <div className="mx-auto max-w-[1440px] px-3 py-4 sm:px-5 lg:px-8">
         {isJoinOpen ? (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#050807]/80 p-4 backdrop-blur-sm">
-            <div className="w-full max-w-xl rounded-[26px] border border-[#d7bd74]/30 bg-[#0d1211] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.5)]">
-              <div className="mb-4 flex items-center justify-between">
-                <div className="text-[0.72rem] uppercase tracking-[0.18em] text-[#f0d8a4]">Create your star link</div>
-                <button
-                  type="button"
-                  onClick={() => setIsJoinOpen(false)}
-                  className="text-lg text-[#f5efe6]"
-                >
-                  ×
-                </button>
-              </div>
+          <div className="fixed inset-0 z-50 overflow-y-auto bg-[#050807]/80 p-3 backdrop-blur-sm sm:p-4">
+            <div className="mx-auto flex min-h-full w-full max-w-xl items-center justify-center py-3">
+              <div className="w-full max-h-[calc(100dvh-1.5rem)] overflow-y-auto rounded-[26px] border border-[#d7bd74]/30 bg-[#0d1211] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.5)] overscroll-contain sm:max-h-[calc(100dvh-2rem)]">
+                <div className="mb-4 flex items-center justify-between">
+                  <div className="text-[0.72rem] uppercase tracking-[0.18em] text-[#f0d8a4]">Create your star link</div>
+                  <button
+                    type="button"
+                    onClick={() => setIsJoinOpen(false)}
+                    className="text-lg text-[#f5efe6]"
+                  >
+                    ×
+                  </button>
+                </div>
 
               <form onSubmit={handleSubmit} className="space-y-4">
                 <label className="block text-[0.62rem] uppercase tracking-[0.16em] text-[#d7d0c3]/75">
@@ -381,13 +392,14 @@ export default function Home() {
               </form>
             </div>
           </div>
+        </div>
         ) : null}
 
-        <header className="rounded-[22px] border border-white/10 bg-[#0b0f0d]/85 px-4 py-3 shadow-[0_18px_50px_rgba(0,0,0,0.45)] backdrop-blur sm:px-6">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-2 text-[#f5dca2]">
-              <span className="text-xl">★</span>
-              <span className="font-serif text-[1.8rem] font-semibold tracking-[0.25em] text-[#f7efe0]">
+        <header className="rounded-[22px] border border-white/10 bg-[#0b0f0d]/85 px-3 py-3 shadow-[0_18px_50px_rgba(0,0,0,0.45)] backdrop-blur sm:px-6">
+          <div className="flex items-center justify-between gap-2 sm:gap-4">
+            <div className="flex min-w-0 flex-1 items-center gap-2 text-[#f5dca2]">
+              <span className="shrink-0 text-lg sm:text-xl">★</span>
+              <span className="truncate font-serif text-[1.1rem] font-semibold tracking-[0.18em] text-[#f7efe0] sm:text-[1.8rem] sm:tracking-[0.25em]">
                 STARLY
               </span>
             </div>
@@ -400,13 +412,21 @@ export default function Home() {
               <a href="#about" className="transition hover:text-[#f5dca2]">About</a>
             </nav>
 
-            <button
-              type="button"
-              onClick={() => setIsJoinOpen((current) => !current)}
-              className="rounded-full border border-[#d8ba7a] bg-[#f0d8a4] px-5 py-2 text-[0.72rem] font-medium uppercase tracking-[0.12em] text-[#0c100f] transition hover:brightness-105"
-            >
-              Join
-            </button>
+            <div className="flex shrink-0 items-center gap-2">
+              <Link
+                href="/admin"
+                className="inline-flex h-10 min-w-[78px] items-center justify-center rounded-full border border-white/15 bg-[#0d1211] px-3 text-[0.58rem] font-medium uppercase tracking-[0.12em] text-[#f5dca2] transition hover:border-[#d8ba7a] sm:h-11 sm:min-w-[92px] sm:px-4 sm:text-[0.65rem]"
+              >
+                Admin
+              </Link>
+              <button
+                type="button"
+                onClick={() => setIsJoinOpen((current) => !current)}
+                className="inline-flex h-10 min-w-[78px] items-center justify-center rounded-full border border-[#d8ba7a] bg-[#f0d8a4] px-3 text-[0.58rem] font-medium uppercase tracking-[0.12em] text-[#0c100f] transition hover:brightness-105 sm:h-11 sm:min-w-[92px] sm:px-5 sm:text-[0.72rem]"
+              >
+                Join
+              </button>
+            </div>
           </div>
         </header>
 
@@ -538,27 +558,27 @@ export default function Home() {
 
               <div className="relative flex items-end justify-center">
                 <div className="absolute inset-x-10 top-6 h-[70%] rounded-[40%] bg-[radial-gradient(circle,_rgba(186,220,135,0.28),_rgba(5,8,7,0)_60%)] blur-3xl" />
-                <div className="relative w-full max-w-[760px] overflow-hidden rounded-[30px] border border-white/10 bg-[#0d1211] shadow-[0_36px_80px_rgba(0,0,0,0.45)]">
+                <div className="relative mx-auto w-full max-w-[420px] overflow-hidden rounded-[30px] border border-white/10 bg-[#0d1211] shadow-[0_36px_80px_rgba(0,0,0,0.45)] sm:max-w-[520px] lg:max-w-[760px]">
                   {topMember?.image_url ? (
                     <Image
                       src={topMember.image_url}
                       alt={topMember.name}
                       width={1200}
                       height={760}
-                      className="h-[470px] w-full object-cover object-center sm:h-[560px]"
+                      className="h-[320px] w-full object-cover object-center sm:h-[420px] lg:h-[560px]"
                     />
                   ) : (
-                    <div className="flex h-[470px] w-full items-center justify-center bg-[radial-gradient(circle_at_top,_rgba(240,216,164,0.22),_rgba(13,18,17,0.96)_55%)] text-[0.84rem] uppercase tracking-[0.22em] text-[#d7d0c3]/75 sm:h-[560px]">
+                    <div className="flex h-[320px] w-full items-center justify-center bg-[radial-gradient(circle_at_top,_rgba(240,216,164,0.22),_rgba(13,18,17,0.96)_55%)] text-[0.84rem] uppercase tracking-[0.22em] text-[#d7d0c3]/75 sm:h-[420px] lg:h-[560px]">
                       No image yet
                     </div>
                   )}
-                  <div className="absolute right-4 top-4 rounded-full border border-white/15 bg-[#0a0f0d]/30 px-3 py-2 text-right backdrop-blur-sm">
-                    <div className="text-[3rem] font-black leading-none text-[#f4d49a]">
+                  <div className="absolute right-3 top-3 rounded-full border border-white/15 bg-[#0a0f0d]/30 px-2.5 py-1.5 text-right backdrop-blur-sm sm:right-4 sm:top-4 sm:px-3 sm:py-2">
+                    <div className="text-[2.1rem] font-black leading-none text-[#f4d49a] sm:text-[3rem]">
                       {topMember ? `#${String(1).padStart(2, "0")}` : "--"}
                     </div>
-                    <div className="text-[0.58rem] uppercase tracking-[0.2em] text-[#d7d0c3]/70">Today&apos;s rank</div>
+                    <div className="text-[0.46rem] uppercase tracking-[0.18em] text-[#d7d0c3]/70 sm:text-[0.58rem] sm:tracking-[0.2em]">Today&apos;s rank</div>
                   </div>
-                  <div className="absolute bottom-4 right-4 flex items-center gap-2 rounded-full border border-white/10 bg-[#0a100d]/60 px-3 py-2 text-[#f4efe4] backdrop-blur-sm">
+                  <div className="absolute bottom-3 right-3 flex items-center gap-2 rounded-full border border-white/10 bg-[#0a100d]/60 px-2.5 py-1.5 text-[#f4efe4] backdrop-blur-sm sm:bottom-4 sm:right-4 sm:px-3 sm:py-2">
                     <button className="flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-white/5 text-lg">‹</button>
                     <button className="flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-white/5 text-lg">›</button>
                   </div>
@@ -608,7 +628,11 @@ export default function Home() {
                 )}
               </div>
 
-              <button className="mt-4 w-full rounded-full border border-white/10 bg-[#111613] px-4 py-2 text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-[#f1e8d6]">
+              <button
+                type="button"
+                onClick={() => document.getElementById("stars")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                className="mt-4 w-full rounded-full border border-white/10 bg-[#111613] px-4 py-2 text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-[#f1e8d6]"
+              >
                 View Full Leaderboard →
               </button>
             </div>

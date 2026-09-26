@@ -156,3 +156,33 @@ export async function voteForMember(
     return { member: null, alreadyVoted: false };
   }
 }
+
+export async function updateMember(
+  memberId: string,
+  updates: Partial<Pick<MemberRecord, "name" | "image_url" | "share_code" | "vote_count" | "voted_devices">>,
+): Promise<MemberRecord> {
+  const client = getClient();
+  const { data, error } = await client
+    .from("members")
+    .update(updates)
+    .eq("id", memberId)
+    .select()
+    .single();
+
+  if (error || !data) {
+    throw new Error(error?.message ?? "Unable to update member.");
+  }
+
+  return normalizeMember(data);
+}
+
+export async function deleteMember(memberId: string): Promise<boolean> {
+  const client = getClient();
+  const { error } = await client.from("members").delete().eq("id", memberId);
+
+  if (error) {
+    throw new Error(error.message ?? "Unable to delete member.");
+  }
+
+  return true;
+}

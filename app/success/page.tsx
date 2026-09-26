@@ -2,29 +2,18 @@
 
 import { Suspense, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
-
-const buildShareLinks = (pageUrl: string, shareText: string) => {
-  const encodedUrl = encodeURIComponent(pageUrl);
-  const encodedText = encodeURIComponent(shareText);
-
-  return {
-    whatsapp: `https://wa.me/?text=${encodedText}%20${encodedUrl}`,
-    facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}&quote=${encodedText}`,
-    instagram: `https://www.instagram.com/?url=${encodedUrl}`,
-  };
-};
+import { buildShareLinks, buildShareText } from "@/lib/share";
 
 function SuccessContent() {
   const searchParams = useSearchParams();
   const name = searchParams.get("name") ?? "Your child";
   const link = searchParams.get("link") ?? "";
+  const imageUrl =
+    searchParams.get("image") ??
+    "https://images.unsplash.com/photo-1517849845537-4d257902454a?auto=format&fit=crop&w=1200&q=80";
 
-  const shareText = useMemo(
-    () => `Hi! I am joining Starly and my child ${name} is ready to shine. Join us!`,
-    [name],
-  );
-
-  const shareLinks = useMemo(() => buildShareLinks(link, shareText), [link, shareText]);
+  const shareText = useMemo(() => buildShareText(name), [name]);
+  const shareLinks = useMemo(() => buildShareLinks(link, shareText, imageUrl), [imageUrl, link, shareText]);
 
   return (
     <main className="min-h-screen bg-[#070b09] px-4 py-10 text-[#f2efe6]">
@@ -35,24 +24,34 @@ function SuccessContent() {
           </div>
         </div>
 
-        <h1 className="text-center text-[1.4rem] font-semibold uppercase tracking-[0.18em] text-[#f0d8a4]">
-          Success
-        </h1>
+        <div className="text-center">
+          <p className="text-[0.62rem] uppercase tracking-[0.22em] text-[#f0d8a4]">Exclusive gift unlocked</p>
+          <h1 className="mt-3 text-[1.7rem] font-semibold uppercase tracking-[0.12em] text-[#f7efe0]">
+            Your star link is ready
+          </h1>
+        </div>
 
-        <p className="mt-4 text-center text-[0.8rem] uppercase tracking-[0.14em] text-[#d7d0c3]/80">
-          Thanks, {name}! Your join request was saved successfully.
-        </p>
+        <div className="mt-6 overflow-hidden rounded-[22px] border border-[#d7bd74]/30 bg-[#111613]">
+          <img src={imageUrl} alt={name} className="h-60 w-full object-cover" />
+        </div>
 
-        <div className="mt-6 rounded-[18px] border border-white/10 bg-[#111613] p-3">
+        <div className="mt-5 rounded-[18px] border border-white/10 bg-[#111613] p-4">
           <div className="mb-2 text-[0.58rem] uppercase tracking-[0.18em] text-[#d7d0c3]/70">
-            Share link
+            Share message
+          </div>
+          <p className="text-[0.82rem] leading-7 text-[#f4efe4]">{shareText}</p>
+        </div>
+
+        <div className="mt-5 rounded-[18px] border border-white/10 bg-[#111613] p-3">
+          <div className="mb-2 text-[0.58rem] uppercase tracking-[0.18em] text-[#d7d0c3]/70">
+            Join link
           </div>
           <div className="rounded-full border border-[#d7bd74]/30 bg-[#0d1211] px-3 py-3 text-center text-[0.7rem] text-[#f0d8a4] break-all">
             {link || "No link available"}
           </div>
         </div>
 
-        <div className="mt-6 grid grid-cols-3 gap-3">
+        <div className="mt-6 grid grid-cols-2 gap-3">
           <a
             href={shareLinks.whatsapp}
             target="_blank"
@@ -71,15 +70,6 @@ function SuccessContent() {
           >
             Facebook
           </a>
-          <a
-            href={shareLinks.instagram}
-            target="_blank"
-            rel="noreferrer"
-            aria-label="Share on Instagram"
-            className="rounded-full bg-[linear-gradient(135deg,#f9ce34,#ee2a7b,#6228d7)] px-3 py-4 text-center text-[0.9rem] font-bold uppercase tracking-[0.08em] text-white"
-          >
-            Instagram
-          </a>
         </div>
       </div>
     </main>
@@ -88,7 +78,7 @@ function SuccessContent() {
 
 export default function SuccessPage() {
   return (
-    <Suspense fallback={<main className="min-h-screen bg-[#070b09] px-4 py-10 text-[#f2efe6]" /> }>
+    <Suspense fallback={<main className="min-h-screen bg-[#070b09] px-4 py-10 text-[#f2efe6]" />}>
       <SuccessContent />
     </Suspense>
   );
