@@ -13,14 +13,48 @@ type AdminMember = {
 };
 
 const ADMIN_PASSWORD = "1234";
+const WINNER_PHOTOS_STORAGE_KEY = "starly-home-winner-photos";
+const MAX_WINNER_PHOTOS = 3;
 const CLOUDINARY_CLOUD_NAME = "dmjmtv7kj";
 const CLOUDINARY_UPLOAD_PRESET = "profile_upload";
 const CLOUDINARY_UPLOAD_URL = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`;
+
+type WinnerPhoto = {
+  id: string;
+  url: string;
+  expiresAt: string;
+  durationDays: number;
+  createdAt: string;
+};
+
+const getStoredWinnerPhotos = () => {
+  if (typeof window === "undefined") {
+    return [] as WinnerPhoto[];
+  }
+
+  try {
+    const raw = window.localStorage.getItem(WINNER_PHOTOS_STORAGE_KEY);
+    if (!raw) {
+      return [] as WinnerPhoto[];
+    }
+
+    const parsed = JSON.parse(raw) as WinnerPhoto[];
+    const active = Array.isArray(parsed) ? parsed.filter((item) => item?.url && new Date(item.expiresAt).getTime() > Date.now()) : [];
+    if (active.length !== parsed.length) {
+      window.localStorage.setItem(WINNER_PHOTOS_STORAGE_KEY, JSON.stringify(active));
+    }
+    return active;
+  } catch {
+    return [] as WinnerPhoto[];
+  }
+};
 
 export default function AdminPage() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [password, setPassword] = useState("");
   const [members, setMembers] = useState<AdminMember[]>([]);
+  const [winnerPhotos, setWinnerPhotos] = useState<WinnerPhoto[]>([]);
+  const [winnerPhotoDays, setWinnerPhotoDays] = useState(30);
   const [isLoading, setIsLoading] = useState(false);
   const [status, setStatus] = useState("");
 
@@ -30,6 +64,8 @@ export default function AdminPage() {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- restore persisted admin auth after client hydration
       setIsLoggedIn(true);
     }
+
+    setWinnerPhotos(getStoredWinnerPhotos());
   }, []);
 
   useEffect(() => {
@@ -161,6 +197,51 @@ export default function AdminPage() {
     }
   };
 
+  const uploadWinnerPhoto = async (file: File | null) => {
+    if (!file) {
+      return;
+    }
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
+
+      const response = await fetch(CLOUDINARY_UPLOAD_URL, {
+        method: "POST",
+        body: formData,
+      });
+
+      const result = await response.json();
+      if (!response.ok || !result.secure_url) {
+        throw new Error(result?.error?.message || "Winner photo upload failed.");
+      }
+
+      const nextPhotos = getStoredWinnerPhotos();
+      const nextWinnerPhoto = {
+        id: `winner-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        url: result.secure_url,
+        expiresAt: new Date(Date.now() + winnerPhotoDays * 24 * 60 * 60 * 1000).toISOString(),
+        durationDays: winnerPhotoDays,
+        createdAt: new Date().toISOString(),
+      };
+
+      const updatedPhotos = [...nextPhotos, nextWinnerPhoto].slice(-MAX_WINNER_PHOTOS);
+      setWinnerPhotos(updatedPhotos);
+      window.localStorage.setItem(WINNER_PHOTOS_STORAGE_KEY, JSON.stringify(updatedPhotos));
+      setStatus(`Winner photo added for ${winnerPhotoDays} days.`);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Winner photo upload failed.");
+    }
+  };
+
+  const deleteWinnerPhoto = (photoId: string) => {
+    const nextPhotos = winnerPhotos.filter((photo) => photo.id !== photoId);
+    setWinnerPhotos(nextPhotos);
+    window.localStorage.setItem(WINNER_PHOTOS_STORAGE_KEY, JSON.stringify(nextPhotos));
+    setStatus("Winner photo deleted.");
+  };
+
   if (!isLoggedIn) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[#070b09] p-4 text-[#f3efe6]">
@@ -222,6 +303,61 @@ export default function AdminPage() {
             {status}
           </div>
         ) : null}
+
+        <div className="mb-6 overflow-hidden rounded-[24px] border border-white/10 bg-[#0d1211] p-4">
+          <div className="mb-4 text-[0.62rem] uppercase tracking-[0.18em] text-[#f0d8a4]">Homepage winner photos</div>
+          <div className="mb-4 grid gap-4 md:grid-cols-[1fr_220px] md:items-center">
+            <div className="space-y-2">
+              <label className="block text-[0.58rem] uppercase tracking-[0.16em] text-[#d7d0c3]/75">
+                Validity
+                <select
+                  value={winnerPhotoDays}
+                  onChange={(event) => setWinnerPhotoDays(Number(event.target.value))}
+                  className="mt-2 w-full rounded-full border border-white/10 bg-[#121914] px-3 py-2 text-[0.8rem] text-[#f5efe6] outline-none focus:border-[#f0d8a4]"
+                >
+                  <option value={15}>15 days</option>
+                  <option value={30}>30 days</option>
+                </select>
+              </label>
+              <label className="block text-[0.58rem] uppercase tracking-[0.16em] text-[#d7d0c3]/75">
+                Upload photo
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(event) => uploadWinnerPhoto(event.target.files?.[0] ?? null)}
+                  className="mt-2 block w-full rounded-full border border-dashed border-white/10 bg-[#121914] px-3 py-2 text-[0.62rem] text-[#f5efe6] file:mr-3 file:rounded-full file:border-0 file:bg-[#f0d8a4] file:px-3 file:py-2 file:text-[0.52rem] file:font-semibold file:uppercase file:tracking-[0.12em] file:text-[#0d120f]"
+                />
+              </label>
+            </div>
+            <div className="text-[0.56rem] uppercase tracking-[0.12em] text-[#d7d0c3]/70">
+              Max {MAX_WINNER_PHOTOS} active photos
+            </div>
+          </div>
+
+          {winnerPhotos.length ? (
+            <div className="grid gap-3 md:grid-cols-3">
+              {winnerPhotos.map((photo) => (
+                <div key={photo.id} className="overflow-hidden rounded-[18px] border border-white/10 bg-[#111613]">
+                  <Image src={photo.url} alt="Winner upload" width={500} height={300} className="h-36 w-full object-cover" />
+                  <div className="flex items-center justify-between gap-2 px-3 py-2 text-[0.56rem] uppercase tracking-[0.12em] text-[#d7d0c3]">
+                    <span>{photo.durationDays} days</span>
+                    <button
+                      type="button"
+                      onClick={() => deleteWinnerPhoto(photo.id)}
+                      className="rounded-full border border-[#d7bd74]/30 bg-[#121914] px-2 py-1 text-[#f5efe6]"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-[18px] border border-dashed border-white/10 bg-[#121914] p-6 text-center text-[0.62rem] uppercase tracking-[0.18em] text-[#d7d0c3]/70">
+              No winner photos uploaded yet.
+            </div>
+          )}
+        </div>
 
         {isLoading ? (
           <div className="rounded-[24px] border border-white/10 bg-[#0d1211] p-8 text-center text-[#d7d0c3]">

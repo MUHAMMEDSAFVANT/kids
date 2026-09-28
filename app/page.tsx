@@ -62,6 +62,7 @@ export default function Home() {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [imageUrl, setImageUrl] = useState("");
   const [shareUrl, setShareUrl] = useState("");
+  const [createdMemberLink, setCreatedMemberLink] = useState("");
   const [isMounted, setIsMounted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
@@ -69,6 +70,7 @@ export default function Home() {
   const [isReviewPopupOpen, setIsReviewPopupOpen] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
   const [members, setMembers] = useState<MemberRecord[]>([]);
+  const [winnerPhotos, setWinnerPhotos] = useState<Array<{ id: string; url: string; expiresAt: string; durationDays: number }>>([]);
 
   const sortedMembers = useMemo(
     () => [...members].sort((a, b) => Number(b.vote_count) - Number(a.vote_count)),
@@ -145,6 +147,19 @@ export default function Home() {
     setShareUrl(window.location.href);
     // eslint-disable-next-line react-hooks/set-state-in-effect -- client-only mount state for share links
     setIsMounted(true);
+    try {
+      const raw = window.localStorage.getItem("starly-home-winner-photos");
+      if (raw) {
+        const parsed = JSON.parse(raw) as Array<{ id: string; url: string; expiresAt: string; durationDays: number }>;
+        const active = Array.isArray(parsed) ? parsed.filter((item) => item?.url && new Date(item.expiresAt).getTime() > Date.now()) : [];
+        setWinnerPhotos(active);
+        if (active.length !== parsed.length) {
+          window.localStorage.setItem("starly-home-winner-photos", JSON.stringify(active));
+        }
+      }
+    } catch {
+      setWinnerPhotos([]);
+    }
     void fetchMembers();
     void fetchReviews();
     const timer = window.setInterval(() => {
@@ -237,6 +252,10 @@ export default function Home() {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
+    if (createdMemberLink) {
+      return;
+    }
+
     const safeName = memberName.trim();
     if (!safeName) {
       setStatusMessage("Please enter a name before joining.");
@@ -267,11 +286,12 @@ export default function Home() {
 
       if (result?.data?.share_url) {
         setShareUrl(result.data.share_url);
-        setIsJoinOpen(false);
+        setCreatedMemberLink(result.data.share_url);
+        setIsJoinOpen(true);
         setReviewComment("Amazing star link! The design looks beautiful and the experience feels premium.");
         setReviewRating(5);
-        setIsReviewPopupOpen(true);
-        setStatusMessage(`Thanks, ${safeName}! Your star link is ready.`);
+        setIsReviewPopupOpen(false);
+        setStatusMessage(`Thanks, ${safeName}! Your star link is ready. Share it below.`);
         await fetchMembers();
         return;
       }
@@ -314,19 +334,19 @@ export default function Home() {
       title: "Monthly winner",
       badge: "Fredy",
       prize: "Monthly winner",
-      image: "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=1200&q=80",
+      image: winnerPhotos[0]?.url || "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=1200&q=80",
     },
     {
       title: "Weekend winner",
       badge: "Ava",
       prize: "Weekend winner",
-      image: "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=1200&q=80",
+      image: winnerPhotos[1]?.url || winnerPhotos[0]?.url || "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=1200&q=80",
     },
     {
       title: "Day winner",
       badge: "Nia",
       prize: "Day winner",
-      image: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=1200&q=80",
+      image: winnerPhotos[2]?.url || winnerPhotos[0]?.url || "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=1200&q=80",
     },
   ];
 
@@ -530,18 +550,67 @@ export default function Home() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3 rounded-[16px] border border-[#d7bd74]/20 bg-[#121914] px-3 py-3 text-[0.58rem] uppercase tracking-[0.12em] text-[#f0d8a4]">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-full border border-[#d7bd74]/30 bg-[#0d1211] text-base">ℹ️</span>
-                  <span>Please send your number to help find the winner.</span>
+                <div className="space-y-2 rounded-[16px] border border-[#d7bd74]/20 bg-[#121914] p-3 text-[0.56rem] uppercase tracking-[0.12em] text-[#f0d8a4]">
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-full border border-[#d7bd74]/30 bg-[#0d1211] text-base">ℹ️</span>
+                    <span>Please send your number to help find the winner.</span>
+                  </div>
+                  <ul className="space-y-1 pl-11 text-[#e8e1d3]">
+                    <li>• Create link and share on WhatsApp</li>
+                    <li>• Vote to earn a chance for the prize</li>
+                    <li>• Winner is selected based on support and votes</li>
+                  </ul>
                 </div>
 
-                <button
-                  type="submit"
-                  disabled={isSubmitting || isUploadingImage}
-                  className="w-full rounded-full border border-[#d7bd74] bg-[#f0d8a4] px-6 py-3 text-[0.72rem] font-semibold uppercase tracking-[0.14em] text-[#0d120f] disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {isSubmitting ? "Creating link..." : isUploadingImage ? "Uploading..." : "Create link"}
-                </button>
+                {createdMemberLink ? (
+                  <div className="space-y-3 rounded-[18px] border border-[#d7bd74]/20 bg-[#121914] p-3">
+                    <div className="text-[0.58rem] uppercase tracking-[0.16em] text-[#f0d8a4]">Share your link</div>
+                    <a
+                      href={createdMemberLink}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="block truncate rounded-full border border-white/10 bg-[#0d1211] px-3 py-2 text-[0.72rem] text-[#f5efe6]"
+                    >
+                      {createdMemberLink}
+                    </a>
+                    <div className="flex flex-wrap gap-2">
+                      {Object.entries(shareLinks).map(([platform, link]) => {
+                        if (!link) {
+                          return null;
+                        }
+
+                        return (
+                          <a
+                            key={platform}
+                            href={link}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="rounded-full border border-[#d7bd74]/30 bg-[#f0d8a4] px-3 py-2 text-[0.52rem] font-semibold uppercase tracking-[0.14em] text-[#0b100d]"
+                          >
+                            {platform}
+                          </a>
+                        );
+                      })}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsReviewPopupOpen(true)}
+                      className="w-full rounded-full border border-white/10 bg-[#0d1211] px-4 py-2 text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-[#f5efe6]"
+                    >
+                      Add review
+                    </button>
+                  </div>
+                ) : null}
+
+                {!createdMemberLink ? (
+                  <button
+                    type="submit"
+                    disabled={isSubmitting || isUploadingImage}
+                    className="w-full rounded-full border border-[#d7bd74] bg-[#f0d8a4] px-6 py-3 text-[0.72rem] font-semibold uppercase tracking-[0.14em] text-[#0d120f] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isSubmitting ? "Creating link..." : isUploadingImage ? "Uploading..." : "Create link"}
+                  </button>
+                ) : null}
 
                 {statusMessage ? (
                   <div className="rounded-full border border-[#d7bd74]/30 bg-[#121914] px-3 py-2 text-center text-[0.58rem] uppercase tracking-[0.12em] text-[#f5efe6]">
@@ -579,13 +648,15 @@ export default function Home() {
               >
                 Admin
               </Link> */}
-              <button
-                type="button"
-                onClick={() => setIsJoinOpen((current) => !current)}
-                className="inline-flex h-10 min-w-[78px] items-center justify-center rounded-full border border-[#d8ba7a] bg-[#f0d8a4] px-3 text-[0.58rem] font-medium uppercase tracking-[0.12em] text-[#0c100f] transition hover:brightness-105 sm:h-11 sm:min-w-[92px] sm:px-5 sm:text-[0.72rem]"
-              >
-                Join
-              </button>
+              {!createdMemberLink ? (
+                <button
+                  type="button"
+                  onClick={() => setIsJoinOpen((current) => !current)}
+                  className="inline-flex h-10 min-w-[78px] items-center justify-center rounded-full border border-[#d8ba7a] bg-[#f0d8a4] px-3 text-[0.58rem] font-medium uppercase tracking-[0.12em] text-[#0c100f] transition hover:brightness-105 sm:h-11 sm:min-w-[92px] sm:px-5 sm:text-[0.72rem]"
+                >
+                  Join
+                </button>
+              ) : null}
             </div>
           </div>
         </header>
@@ -620,13 +691,15 @@ export default function Home() {
             >
               {winnerSlides.map((slide) => (
                 <div key={`${slide.badge}-${slide.title}`} className="relative min-w-full">
-                  <Image
-                    src={slide.image}
-                    alt={slide.title}
-                    width={1400}
-                    height={420}
-                    className="h-[260px] w-full object-cover sm:h-[320px] lg:h-[390px]"
-                  />
+                  <div className="relative h-[260px] w-full sm:h-[320px] lg:h-[390px]">
+                    <Image
+                      src={slide.image}
+                      alt={slide.title}
+                      fill
+                      sizes="100vw"
+                      className="object-cover"
+                    />
+                  </div>
                   <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(7,11,9,0.72),rgba(7,11,9,0.2),rgba(7,11,9,0.72))]" />
                   <div className="absolute inset-x-0 bottom-0 p-5 sm:p-7">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
