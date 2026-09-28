@@ -1,0 +1,26 @@
+[
+  {
+    "id": "review-1790579286999-2qr1o4",
+    "name": "You",
+    "rating": 5,
+    "text": "Amazing star link! The design looks beautiful and the experience feels premium.",
+    "image": "https://res.cloudinary.com/dmjmtv7kj/image/upload/v1790578580/iv6fmdswfl0kqxntmpae.jpg",
+    "created_at": "2026-09-28T07:08:06.999Z"
+  },
+  {
+    "id": "review-demo-1",
+    "name": "Ava",
+    "rating": 5,
+    "text": "The star page feels warm and joyful. I love how easy it is to vote and share.",
+    "image": "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=300&q=80",
+    "created_at": "2026-09-28T00:00:00.000Z"
+  },
+  {
+    "id": "review-demo-2",
+    "name": "Leo",
+    "rating": 4,
+    "text": "Beautiful design and very smooth experience. The image preview looks great.",
+    "image": "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=300&q=80",
+    "created_at": "2026-09-27T00:00:00.000Z"
+  }
+]

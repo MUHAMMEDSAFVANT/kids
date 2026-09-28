@@ -14,7 +14,17 @@ export type MemberRecord = {
   created_at: string;
 };
 
+export type ReviewRecord = {
+  id: string;
+  name: string;
+  rating: number;
+  text: string;
+  image: string;
+  created_at: string;
+};
+
 const LOCAL_MEMBERS_PATH = path.join(process.cwd(), "data", "members.json");
+const LOCAL_REVIEWS_PATH = path.join(process.cwd(), "data", "reviews.json");
 
 function hasSupabaseConfig() {
   return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
@@ -45,6 +55,26 @@ async function writeLocalMembersFile(members: MemberRecord[]) {
   await fs.writeFile(LOCAL_MEMBERS_PATH, JSON.stringify(members, null, 2), "utf8");
 }
 
+async function readLocalReviewsFile(): Promise<ReviewRecord[]> {
+  try {
+    const raw = await fs.readFile(LOCAL_REVIEWS_PATH, "utf8");
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.map(normalizeReview) : [];
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException)?.code === "ENOENT") {
+      return [];
+    }
+
+    console.error("[store] readLocalReviewsFile error:", error);
+    return [];
+  }
+}
+
+async function writeLocalReviewsFile(reviews: ReviewRecord[]) {
+  await fs.mkdir(path.dirname(LOCAL_REVIEWS_PATH), { recursive: true });
+  await fs.writeFile(LOCAL_REVIEWS_PATH, JSON.stringify(reviews, null, 2), "utf8");
+}
+
 function normalizeMember(record: any): MemberRecord {
   const rawVotedDevices = record?.voted_devices;
   let votedDevices: string[] = [];
@@ -70,6 +100,17 @@ function normalizeMember(record: any): MemberRecord {
     share_code: String(record?.share_code ?? ""),
     vote_count: Number(record?.vote_count ?? 0),
     voted_devices: votedDevices,
+    created_at: String(record?.created_at ?? new Date().toISOString()),
+  };
+}
+
+function normalizeReview(record: any): ReviewRecord {
+  return {
+    id: String(record?.id ?? `review-${Date.now()}`),
+    name: String(record?.name ?? "Anonymous"),
+    rating: Number(record?.rating ?? 5),
+    text: String(record?.text ?? ""),
+    image: String(record?.image ?? ""),
     created_at: String(record?.created_at ?? new Date().toISOString()),
   };
 }
@@ -282,4 +323,37 @@ export async function deleteMember(memberId: string): Promise<boolean> {
   }
 
   return true;
+}
+
+export async function readReviews(): Promise<ReviewRecord[]> {
+  const reviews = await readLocalReviewsFile();
+
+  return [...reviews].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+}
+
+export async function createReview({
+  name,
+  rating,
+  text,
+  image,
+}: {
+  name: string;
+  rating: number;
+  text: string;
+  image?: string;
+}): Promise<ReviewRecord> {
+  const nextReview: ReviewRecord = {
+    id: `review-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    name: String(name || "Anonymous").trim() || "Anonymous",
+    rating: Number(rating) || 5,
+    text: String(text || "").trim(),
+    image: String(image || "").trim(),
+    created_at: new Date().toISOString(),
+  };
+
+  const currentReviews = await readLocalReviewsFile();
+  const nextReviews = [nextReview, ...currentReviews].slice(0, 50);
+  await writeLocalReviewsFile(nextReviews);
+
+  return nextReview;
 }

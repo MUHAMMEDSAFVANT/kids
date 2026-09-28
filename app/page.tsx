@@ -59,12 +59,14 @@ const CLOUDINARY_UPLOAD_URL = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOU
 export default function Home() {
   const router = useRouter();
   const [memberName, setMemberName] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
   const [imageUrl, setImageUrl] = useState("");
   const [shareUrl, setShareUrl] = useState("");
   const [isMounted, setIsMounted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [isJoinOpen, setIsJoinOpen] = useState(false);
+  const [isReviewPopupOpen, setIsReviewPopupOpen] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
   const [members, setMembers] = useState<MemberRecord[]>([]);
 
@@ -126,17 +128,31 @@ export default function Home() {
     }
   }, []);
 
+  const fetchReviews = useCallback(async () => {
+    try {
+      const response = await fetch("/api/reviews");
+      const result = await response.json();
+      if (response.ok && Array.isArray(result?.data)) {
+        setReviews(result.data);
+      }
+    } catch {
+      setReviews([]);
+    }
+  }, []);
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- client-only URL hydration avoids SSR mismatch
     setShareUrl(window.location.href);
     // eslint-disable-next-line react-hooks/set-state-in-effect -- client-only mount state for share links
     setIsMounted(true);
     void fetchMembers();
+    void fetchReviews();
     const timer = window.setInterval(() => {
       void fetchMembers();
+      void fetchReviews();
     }, 4000);
     return () => window.clearInterval(timer);
-  }, [fetchMembers]);
+  }, [fetchMembers, fetchReviews]);
 
   const handleImageUpload = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -238,6 +254,7 @@ export default function Home() {
         },
         body: JSON.stringify({
           name: safeName,
+          phone_number: phoneNumber.trim(),
           image_url: imageUrl.trim(),
         }),
       });
@@ -251,9 +268,11 @@ export default function Home() {
       if (result?.data?.share_url) {
         setShareUrl(result.data.share_url);
         setIsJoinOpen(false);
-        const shareText = `Hi! I’m joining Starly and my child ${safeName} is ready to shine. Join my star link and unlock an exclusive gift!`;
-        const successUrl = `/success?name=${encodeURIComponent(safeName)}&link=${encodeURIComponent(result.data.share_url)}&image=${encodeURIComponent(imageUrl.trim())}&description=${encodeURIComponent(shareText)}`;
-        router.push(successUrl);
+        setReviewComment("Amazing star link! The design looks beautiful and the experience feels premium.");
+        setReviewRating(5);
+        setIsReviewPopupOpen(true);
+        setStatusMessage(`Thanks, ${safeName}! Your star link is ready.`);
+        await fetchMembers();
         return;
       }
 
@@ -312,6 +331,52 @@ export default function Home() {
   ];
 
   const [winnerSlideIndex, setWinnerSlideIndex] = useState(0);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState("");
+  const [reviews, setReviews] = useState<Array<{ id: string; name: string; rating: number; text: string; image: string }>>([]);
+
+  const averageReviewRating = useMemo(() => {
+    if (!reviews.length) {
+      return 0;
+    }
+
+    const total = reviews.reduce((sum, review) => sum + Number(review.rating || 0), 0);
+    return total / reviews.length;
+  }, [reviews]);
+
+  const handleAddReview = async () => {
+    const trimmedComment = reviewComment.trim();
+    if (!trimmedComment) {
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/reviews", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: "You",
+          rating: reviewRating,
+          text: trimmedComment,
+          image: topMember?.image_url || imageUrl || avatarImages[0],
+        }),
+      });
+
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result?.error || "Unable to save review.");
+      }
+
+      setReviewRating(5);
+      setIsReviewPopupOpen(false);
+      setStatusMessage("Thank you for your review.");
+      await fetchReviews();
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : "Unable to save review.");
+    }
+  };
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -324,6 +389,87 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-[#070b09] text-[#f2efe6]">
       <div className="mx-auto max-w-[1440px] px-3 py-4 sm:px-5 lg:px-8">
+        {isReviewPopupOpen ? (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[#050807]/80 p-3 backdrop-blur-sm sm:p-4">
+            <div className="w-full max-w-5xl rounded-[24px] border border-[#d7bd74]/30 bg-[#0b0f0d] p-4 shadow-[0_20px_60px_rgba(0,0,0,0.5)] sm:p-6">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-[0.62rem] uppercase tracking-[0.2em] text-[#d4c9b8]/75">Customer feedback</div>
+                  <div className="mt-2 text-[1.2rem] font-semibold uppercase tracking-[0.12em] text-[#f0d8a4]">Rate & review</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsReviewPopupOpen(false)}
+                  className="text-xl text-[#f5efe6]"
+                >
+                  ×
+                </button>
+              </div>
+
+              <div className="grid gap-5 lg:grid-cols-[320px_1fr]">
+                <button
+                  type="button"
+                  onClick={() => setReviewComment((current) => current || "Amazing star link! The design looks beautiful and the experience feels premium.")}
+                  className="group overflow-hidden rounded-[22px] border border-white/10 bg-[#0d1211] p-2 text-left transition hover:border-[#d7bd74]/30"
+                >
+                  <Image
+                    src={topMember?.image_url || imageUrl || avatarImages[0]}
+                    alt={topMember?.name || "Star review"}
+                    width={500}
+                    height={500}
+                    className="h-[260px] w-full rounded-[16px] object-cover transition group-hover:scale-[1.02]"
+                  />
+                  <div className="mt-3 text-center text-[0.7rem] uppercase tracking-[0.18em] text-[#f0d8a4]">
+                    Click image to comment
+                  </div>
+                </button>
+
+                <div className="rounded-[18px] border border-white/10 bg-[#111613] p-4 sm:p-5">
+                  <div className="text-[0.62rem] uppercase tracking-[0.18em] text-[#d4c9b8]/70">Your rating</div>
+                  <div className="mt-3 flex items-center gap-2">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <button
+                        key={star}
+                        type="button"
+                        aria-label={`Rate ${star} star${star > 1 ? "s" : ""}`}
+                        onClick={() => setReviewRating(star)}
+                        className={`text-3xl transition ${star <= reviewRating ? "text-[#f0d8a4]" : "text-[#5a5a58] hover:text-[#d8c08d]"}`}
+                      >
+                        ★
+                      </button>
+                    ))}
+                  </div>
+
+                  <label className="mt-5 block text-[0.62rem] uppercase tracking-[0.16em] text-[#d4c9b8]/70">
+                    Add a comment
+                    <textarea
+                      value={reviewComment}
+                      onChange={(event) => setReviewComment(event.target.value)}
+                      rows={5}
+                      placeholder="Write your feedback here..."
+                      className="mt-2 w-full resize-none rounded-[16px] border border-white/10 bg-[#0d1211] px-3 py-3 text-[0.8rem] text-[#f5efe6] outline-none placeholder:text-[#d7d0c3]/50 focus:border-[#f0d8a4]"
+                    />
+                  </label>
+
+                  <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="text-[0.62rem] uppercase tracking-[0.14em] text-[#d7d0c3]/70">
+                      {reviewRating}/5 stars selected
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleAddReview}
+                      disabled={!reviewComment.trim()}
+                      className="rounded-full border border-[#d7bd74] bg-[#f0d8a4] px-5 py-3 text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-[#0d120f] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Add review
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
         {isJoinOpen ? (
           <div className="fixed inset-0 z-50 overflow-y-auto bg-[#050807]/80 p-3 backdrop-blur-sm sm:p-4">
             <div className="mx-auto flex min-h-full w-full max-w-xl items-center justify-center py-3">
@@ -351,6 +497,17 @@ export default function Home() {
                 </label>
 
                 <label className="block text-[0.62rem] uppercase tracking-[0.16em] text-[#d7d0c3]/75">
+                  Phone number
+                  <input
+                    type="tel"
+                    value={phoneNumber}
+                    onChange={(event) => setPhoneNumber(event.target.value)}
+                    placeholder="Enter your phone number"
+                    className="mt-2 w-full rounded-full border border-white/10 bg-[#121914] px-4 py-3 text-[0.8rem] text-[#f5efe6] outline-none placeholder:text-[#d7d0c3]/50 focus:border-[#f0d8a4]"
+                  />
+                </label>
+
+                <label className="block text-[0.62rem] uppercase tracking-[0.16em] text-[#d7d0c3]/75">
                   Upload image
                   <input
                     type="file"
@@ -370,6 +527,21 @@ export default function Home() {
                   )}
                   <div className="mt-3 text-center text-[1.2rem] font-semibold text-[#f0d8a4]">
                     {memberName || "Your child name"}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 rounded-[16px] border border-white/10 bg-[#0d1211] p-3 text-center text-[0.56rem] uppercase tracking-[0.12em] text-[#e7ddd0]">
+                  <div className="rounded-full border border-[#d7bd74]/20 bg-[#121914] px-2 py-2">
+                    <div className="text-base">🏆</div>
+                    <div className="mt-1">Winner</div>
+                  </div>
+                  <div className="rounded-full border border-[#d7bd74]/20 bg-[#121914] px-2 py-2">
+                    <div className="text-base">🎁</div>
+                    <div className="mt-1">Gift</div>
+                  </div>
+                  <div className="rounded-full border border-[#d7bd74]/20 bg-[#121914] px-2 py-2">
+                    <div className="text-base">📲</div>
+                    <div className="mt-1">{phoneNumber ? phoneNumber : "Details"}</div>
                   </div>
                 </div>
 
@@ -802,41 +974,50 @@ export default function Home() {
             </div>
           </section>
 
+          <section className="rounded-[24px] border border-white/10 bg-[#090e0d] p-4 sm:p-5">
+            <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <div className="text-[0.62rem] uppercase tracking-[0.18em] text-[#d4c9b8]/70">Customer feedback</div>
+                <h2 className="mt-2 text-[1.1rem] font-semibold uppercase tracking-[0.16em] text-[#f0d8a4]">Ratings & reviews</h2>
+              </div>
+              <div className="flex items-center gap-2 rounded-full border border-[#d7bd74]/30 bg-[#111613] px-3 py-2 text-[0.7rem] text-[#f0d8a4]">
+                <span className="text-lg">★</span>
+                <span>{reviews.length ? `${averageReviewRating.toFixed(1)}/5` : "No reviews yet"}</span>
+              </div>
+            </div>
+
+            {reviews.length ? (
+              <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+                {reviews.slice(0, 6).map((review) => (
+                  <article key={review.id} className="rounded-[20px] border border-white/10 bg-[#0d1211] p-4">
+                    <div className="flex items-center gap-3">
+                      <img
+                        src={review.image || avatarImages[0]}
+                        alt={review.name}
+                        className="h-12 w-12 rounded-full object-cover ring-2 ring-[#d7bd74]/20"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[0.9rem] font-semibold text-[#f5efe6]">{review.name}</div>
+                        <div className="mt-1 flex items-center gap-1 text-[#f0d8a4]">
+                          {Array.from({ length: 5 }).map((_, starIndex) => (
+                            <span key={`${review.id}-${starIndex}`} className={starIndex < Number(review.rating || 0) ? "text-[#f0d8a4]" : "text-[#4a4a47]"}>★</span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                    <p className="mt-3 text-[0.82rem] leading-6 text-[#e8e2d7]">“{review.text}”</p>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-[16px] border border-dashed border-white/10 bg-[#0c110f] px-3 py-5 text-center text-[0.62rem] uppercase tracking-[0.16em] text-[#d7d0c3]/70">
+                Rated reviews will appear here after the first feedback is submitted.
+              </div>
+            )}
+          </section>
+
         </main>
 
         <footer id="about" className="scroll-mt-28 mt-8 border-t border-white/10 px-3 pb-6 pt-5 text-[#f0e9dd]">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex items-center gap-2 text-[#f5dca2]">
-              <span className="text-lg">★</span>
-              <span className="font-serif text-[1.4rem] tracking-[0.2em] text-[#f7efe0]">STARLY</span>
-            </div>
-
-            <nav className="flex flex-wrap items-center gap-4 text-[0.62rem] uppercase tracking-[0.14em] text-[#d4c7b3]/75">
-              <a href="#today-star">Today&apos;s Star</a>
-              <a href="#stars">Stars</a>
-              <a href="#rising">Rising</a>
-              <a href="#hall-of-stars">Hall of Stars</a>
-              <a href="#about">About</a>
-              <a href="#">Contact</a>
-            </nav>
-
-            <div className="flex items-center gap-3 text-[#f7efe0]">
-              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/[0.02]">f</span>
-              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/[0.02]">◎</span>
-              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/[0.02]">◌</span>
-            </div>
-          </div>
-
-          <div className="mt-6 flex flex-col gap-3 border-t border-white/10 pt-4 text-[0.62rem] uppercase tracking-[0.12em] text-[#d4c9b8]/65 sm:flex-row sm:items-center sm:justify-between">
-            <div>© 2026 Starly. All rights reserved.</div>
-            <div className="flex gap-5">
-              <span>Terms</span>
-              <span>Privacy</span>
-              <span>Safety</span>
-            </div>
-          </div>
-        </footer>
-      </div>
-    </div>
-  );
-}
+            <div class
