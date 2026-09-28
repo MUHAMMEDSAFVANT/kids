@@ -530,19 +530,9 @@ export default function Home() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-2 rounded-[16px] border border-white/10 bg-[#0d1211] p-3 text-center text-[0.56rem] uppercase tracking-[0.12em] text-[#e7ddd0]">
-                  <div className="rounded-full border border-[#d7bd74]/20 bg-[#121914] px-2 py-2">
-                    <div className="text-base">🏆</div>
-                    <div className="mt-1">Winner</div>
-                  </div>
-                  <div className="rounded-full border border-[#d7bd74]/20 bg-[#121914] px-2 py-2">
-                    <div className="text-base">🎁</div>
-                    <div className="mt-1">Gift</div>
-                  </div>
-                  <div className="rounded-full border border-[#d7bd74]/20 bg-[#121914] px-2 py-2">
-                    <div className="text-base">📲</div>
-                    <div className="mt-1">{phoneNumber ? phoneNumber : "Details"}</div>
-                  </div>
+                <div className="flex items-center gap-3 rounded-[16px] border border-[#d7bd74]/20 bg-[#121914] px-3 py-3 text-[0.58rem] uppercase tracking-[0.12em] text-[#f0d8a4]">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full border border-[#d7bd74]/30 bg-[#0d1211] text-base">ℹ️</span>
+                  <span>Please send your number to help find the winner.</span>
                 </div>
 
                 <button
@@ -1020,4 +1010,37 @@ export default function Home() {
 
         <footer id="about" className="scroll-mt-28 mt-8 border-t border-white/10 px-3 pb-6 pt-5 text-[#f0e9dd]">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-            <div class
+            <div className="flex items-center gap-2 text-[#f5dca2]">
+              <span className="text-lg">★</span>
+              <span className="font-serif text-[1.4rem] tracking-[0.2em] text-[#f7efe0]">STARLY</span>
+            </div>
+
+            <nav className="flex flex-wrap items-center gap-4 text-[0.62rem] uppercase tracking-[0.14em] text-[#d4c7b3]/75">
+              <a href="#today-star">Today&apos;s Star</a>
+              <a href="#stars">Stars</a>
+              <a href="#rising">Rising</a>
+              <a href="#hall-of-stars">Hall of Stars</a>
+              <a href="#about">About</a>
+              <a href="#">Contact</a>
+            </nav>
+
+            <div className="flex items-center gap-3 text-[#f7efe0]">
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/[0.02]">f</span>
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/[0.02]">◎</span>
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/[0.02]">◌</span>
+            </div>
+          </div>
+
+          <div className="mt-6 flex flex-col gap-3 border-t border-white/10 pt-4 text-[0.62rem] uppercase tracking-[0.12em] text-[#d4c9b8]/65 sm:flex-row sm:items-center sm:justify-between">
+            <div>© 2026 Starly. All rights reserved.</div>
+            <div className="flex gap-5">
+              <span>Terms</span>
+              <span>Privacy</span>
+              <span>Safety</span>
+            </div>
+          </div>
+        </footer>
+      </div>
+    </div>
+  );
+}
