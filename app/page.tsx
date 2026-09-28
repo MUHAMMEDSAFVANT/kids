@@ -251,7 +251,8 @@ export default function Home() {
       if (result?.data?.share_url) {
         setShareUrl(result.data.share_url);
         setIsJoinOpen(false);
-        const successUrl = `/success?name=${encodeURIComponent(safeName)}&link=${encodeURIComponent(result.data.share_url)}&image=${encodeURIComponent(imageUrl.trim())}`;
+        const shareText = `Hi! I’m joining Starly and my child ${safeName} is ready to shine. Join my star link and unlock an exclusive gift!`;
+        const successUrl = `/success?name=${encodeURIComponent(safeName)}&link=${encodeURIComponent(result.data.share_url)}&image=${encodeURIComponent(imageUrl.trim())}&description=${encodeURIComponent(shareText)}`;
         router.push(successUrl);
         return;
       }
@@ -279,10 +280,7 @@ export default function Home() {
       };
     }
 
-    const shareUrlWithImage = imageUrl
-      ? `${shareUrl}${shareUrl.includes("?") ? "&" : "?"}image=${encodeURIComponent(imageUrl)}`
-      : shareUrl;
-    const encodedUrl = encodeURIComponent(shareUrlWithImage);
+    const encodedUrl = encodeURIComponent(shareUrl);
     const encodedText = encodeURIComponent(shareText);
 
     return {

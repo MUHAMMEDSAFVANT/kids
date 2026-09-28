@@ -4,6 +4,7 @@ create table if not exists public.members (
   id text primary key,
   name text not null,
   image_url text,
+  description text not null default '',
   share_code text unique not null,
   vote_count integer not null default 0,
   voted_devices jsonb not null default '[]'::jsonb,

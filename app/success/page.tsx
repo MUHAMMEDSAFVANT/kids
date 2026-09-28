@@ -11,9 +11,13 @@ function SuccessContent() {
   const imageUrl =
     searchParams.get("image") ??
     "https://images.unsplash.com/photo-1517849845537-4d257902454a?auto=format&fit=crop&w=1200&q=80";
+  const description = searchParams.get("description") ?? buildShareText(name);
 
-  const shareText = useMemo(() => buildShareText(name), [name]);
-  const shareLinks = useMemo(() => buildShareLinks(link, shareText, imageUrl), [imageUrl, link, shareText]);
+  const shareText = useMemo(() => description, [description]);
+  const shareLinks = useMemo(
+    () => buildShareLinks(link, shareText, imageUrl, description),
+    [description, imageUrl, link, shareText],
+  );
 
   return (
     <main className="min-h-screen bg-[#070b09] px-4 py-10 text-[#f2efe6]">

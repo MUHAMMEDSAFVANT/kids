@@ -7,6 +7,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const name = String(body.name ?? "").trim();
     const imageUrl = String(body.image_url ?? "").trim();
+    const description = String(body.description ?? "").trim();
 
     if (!name) {
       return NextResponse.json(
@@ -18,6 +19,7 @@ export async function POST(request: NextRequest) {
     const member = await createMember({
       name,
       image_url: imageUrl,
+      description,
     });
 
     console.log("[api/join] created share link", {
